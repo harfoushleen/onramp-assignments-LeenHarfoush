@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title> Theme Switcher</title>
+        <link rel="stylesheet" href="./output.css" />
+
+        <script>
+            if (localStorage.getItem('theme') === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        </script>
+    </head>
+
+    <body class="bg-background dark:bg-dark-background min-h-screen transition-colors duration-300">
+
+        <div class="max-w-2xl mx-auto px-6 py-16">
+            
+            <!-- Header -->
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold text-primary dark:text-dark-primary mb-3">Theme Switcher</h1>
+                <p class="text-gray-500">A light and dark mode demo</p>
+            </div>
+
+            <!-- Toggle Button -->
+            <div class="flex justify-center mb-12">
+                <button id="theme-toggle" class="bg-primary dark:bg-dark-primary text-white px-6 py-3 rounded-full font-medium">
+                    Switch to Dark Mode
+                </button>
+            </div>
+
+            <!-- Card -->
+            <div class="bg-surface dark:bg-dark-surface rounded-2xl p-8 shadow-sm">
+                <h2 class="text-xl font-semibold text-primary dark:text-dark-primary mb-3">Sample Card</h2>
+                <p class="text-gray-500 ">This card uses your custom surface color token.</p>
+            </div>
+
+        </div>
+        <script>
+            const button= document.getElementById('theme-toggle');
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+                button.textContent = 'Switch to Light Mode';
+            }
+            button.addEventListener('click', () => {
+                const isDark= document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                if(isDark) {
+                    button.textContent= 'Switch to Light Mode';
+                } else {
+                    button.textContent= 'Switch to Dark Mode';
+                }
+            });
+        </script>
+    </body>
+</html>
