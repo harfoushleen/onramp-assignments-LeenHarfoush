@@ -1,10 +1,10 @@
+import logging
 from unittest.mock import patch
 
-import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from scraper.crawl import RobotsDisallowedError, content_hash, crawl_one
+from scraper.crawl import content_hash, crawl_one
 from scraper.db import Base, Page
 from scraper.rate_limit import RateLimiter
 
@@ -41,13 +41,16 @@ def test_crawl_one_stores_a_row():
     assert session.query(Page).count() == 1
 
 
-def test_crawl_one_respects_robots_disallow():
+def test_crawl_one_skips_disallowed_url_without_raising(caplog):
     session = make_session()
-    with pytest.raises(RobotsDisallowedError):
-        crawl_one(
+    with caplog.at_level(logging.INFO, logger="scraper.crawl"):
+        result = crawl_one(
             "https://example.com/blocked",
             session,
             FakeRobots(allowed=False),
             RateLimiter(delay_seconds=0),
         )
+
+    assert result is None
     assert session.query(Page).count() == 0
+    assert "disallowed by robots.txt" in caplog.text
