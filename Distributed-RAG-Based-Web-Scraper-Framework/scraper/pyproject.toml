@@ -20,3 +20,6 @@ select = ["E", "F", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "browser: launches a real headless browser (Playwright); skipped unless RUN_BROWSER_TESTS=1",
+]

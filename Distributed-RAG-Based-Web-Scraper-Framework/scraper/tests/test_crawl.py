@@ -41,6 +41,27 @@ def test_crawl_one_stores_a_row():
     assert session.query(Page).count() == 1
 
 
+def test_crawl_one_uses_injected_fetch_fn():
+    session = make_session()
+    calls = []
+
+    def fake_js_fetch(url: str) -> str:
+        calls.append(url)
+        return SAMPLE_HTML
+
+    with patch("scraper.crawl.fetch", side_effect=AssertionError("should not use default fetch")):
+        page = crawl_one(
+            "https://example.com/rendered",
+            session,
+            FakeRobots(allowed=True),
+            RateLimiter(delay_seconds=0),
+            fetch_fn=fake_js_fetch,
+        )
+
+    assert calls == ["https://example.com/rendered"]
+    assert page.extracted_text == "Hi there."
+
+
 def test_crawl_one_skips_disallowed_url_without_raising(caplog):
     session = make_session()
     with caplog.at_level(logging.INFO, logger="scraper.crawl"):
