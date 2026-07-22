@@ -2,6 +2,14 @@
 
 Simple sleep-based limiter for now; a token-bucket or backoff-aware version can
 replace this later without changing crawl_one()'s call site.
+
+State (`_last_request_at`) lives in process memory, so it's only enforced
+within a single worker process. With multiple worker *containers* crawling
+the same domain, each keeps its own independent clock, so the aggregate
+request rate to that domain scales roughly linearly with worker count instead
+of staying fixed -- a known, documented limitation, not silently ignored. See
+tasks.py's module docstring and DECISIONS.md's Day 2 scaling entry for the
+full tradeoff and why a Redis-backed shared limiter was deferred.
 """
 
 import os

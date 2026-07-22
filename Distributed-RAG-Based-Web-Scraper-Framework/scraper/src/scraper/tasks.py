@@ -8,9 +8,16 @@ once per worker process) rather than per task, so their per-domain caches
 tasks a single worker processes -- a fresh RateLimiter per task would never
 remember the previous request and the delay would do nothing. This is
 process-local: with more than one worker process, each has its own cache and
-rate limiting is only enforced within a process, not across all of them. A
-Redis-backed shared limiter would be the fix if that becomes a real problem,
-but isn't needed at this scale.
+rate limiting is only enforced within a process, not across all of them. Now
+that Day 2's scaling task actually runs multiple worker containers against
+the same domain, this means the *aggregate* request rate to a domain scales
+roughly linearly with worker count instead of staying fixed at
+`REQUEST_DELAY_SECONDS` -- e.g. 3 workers means up to ~3x the intended rate,
+not just "3x more parallel." A Redis-backed shared token bucket would be the
+correct fix; see DECISIONS.md's Day 2 scaling entry for why that was deferred
+for this project (and why a naive per-worker delay divisor would have made
+this worse, not better -- N workers each waiting delay/N independently
+produces an N^2, not Nx, over-rate).
 
 Table creation (init_db) is deliberately NOT run at import time -- creating
 the engine/sessionmaker here is safe (SQLAlchemy doesn't open a connection
