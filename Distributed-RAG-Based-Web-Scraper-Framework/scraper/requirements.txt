@@ -4,3 +4,4 @@ lxml==6.1.1
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.10
 playwright==1.61.0
+celery[redis]==5.4.0
