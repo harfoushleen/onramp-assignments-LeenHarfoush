@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from scraper.db import Page
+from scraper.db import Page, get_latest_page
 from scraper.fetch import USER_AGENT, fetch
 from scraper.parse import parse
 from scraper.rate_limit import RateLimiter
@@ -45,12 +45,18 @@ def crawl_one(
     fetcher = fetch_fn or fetch
     html = fetcher(url)
     parsed = parse(html)
+    new_hash = content_hash(parsed["text"])
+
+    latest = get_latest_page(session, url)
+    if latest is not None and latest.content_hash == new_hash:
+        logger.info("content unchanged for %s, skipping new version", url)
+        return latest
 
     page = Page(
         url=url,
         raw_html=html,
         extracted_text=parsed["text"],
-        content_hash=content_hash(parsed["text"]),
+        content_hash=new_hash,
         fetched_at=datetime.now(UTC),
     )
     session.add(page)

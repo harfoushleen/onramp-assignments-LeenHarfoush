@@ -5,10 +5,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from scraper.crawl import content_hash, crawl_one
-from scraper.db import Base, Page
+from scraper.db import Base, Page, get_latest_page
 from scraper.rate_limit import RateLimiter
 
 SAMPLE_HTML = "<html><head><title>T</title></head><body><p>Hi there.</p></body></html>"
+CHANGED_HTML = (
+    "<html><head><title>T</title></head><body><p>Something different now.</p></body></html>"
+)
 
 
 class FakeRobots:
@@ -75,3 +78,50 @@ def test_crawl_one_skips_disallowed_url_without_raising(caplog):
     assert result is None
     assert session.query(Page).count() == 0
     assert "disallowed by robots.txt" in caplog.text
+
+
+def test_crawl_one_skips_insert_when_content_unchanged(caplog):
+    session = make_session()
+    url = "https://example.com/versioned"
+
+    with patch("scraper.crawl.fetch", return_value=SAMPLE_HTML):
+        first = crawl_one(url, session, FakeRobots(), RateLimiter(delay_seconds=0))
+        with caplog.at_level(logging.INFO, logger="scraper.crawl"):
+            second = crawl_one(url, session, FakeRobots(), RateLimiter(delay_seconds=0))
+
+    assert session.query(Page).filter(Page.url == url).count() == 1
+    assert second.id == first.id
+    assert "content unchanged" in caplog.text
+
+
+def test_crawl_one_inserts_new_version_when_content_changes():
+    session = make_session()
+    url = "https://example.com/versioned"
+
+    with patch("scraper.crawl.fetch", return_value=SAMPLE_HTML):
+        first = crawl_one(url, session, FakeRobots(), RateLimiter(delay_seconds=0))
+    with patch("scraper.crawl.fetch", return_value=CHANGED_HTML):
+        second = crawl_one(url, session, FakeRobots(), RateLimiter(delay_seconds=0))
+
+    assert session.query(Page).filter(Page.url == url).count() == 2
+    assert second.id != first.id
+    assert second.content_hash != first.content_hash
+
+
+def test_get_latest_page_returns_none_for_unknown_url():
+    session = make_session()
+    assert get_latest_page(session, "https://example.com/never-crawled") is None
+
+
+def test_get_latest_page_returns_most_recently_stored_version():
+    session = make_session()
+    url = "https://example.com/versioned"
+
+    with patch("scraper.crawl.fetch", return_value=SAMPLE_HTML):
+        crawl_one(url, session, FakeRobots(), RateLimiter(delay_seconds=0))
+    with patch("scraper.crawl.fetch", return_value=CHANGED_HTML):
+        second = crawl_one(url, session, FakeRobots(), RateLimiter(delay_seconds=0))
+
+    latest = get_latest_page(session, url)
+    assert latest.id == second.id
+    assert latest.content_hash == second.content_hash
