@@ -109,3 +109,232 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* Day 5 UI: search + ask views -- flat, bordered, minimal per the mockups
+   (no shadows/gradients; existing theme variables reused throughout). */
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  text-align: left;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.subtitle {
+  color: var(--text);
+  margin-top: 8px;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tab-active {
+  color: var(--text-h);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 20px;
+  font-size: 15px;
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-h);
+}
+
+.radio input {
+  accent-color: var(--accent);
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.input-row input[type='text'] {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+}
+
+.input-row input[type='text']:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border: none;
+  border-radius: 8px;
+  background: var(--text-h);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status-message {
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+}
+
+.status-error {
+  color: #d64545;
+}
+
+.card-list,
+.sources-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: left;
+}
+
+.card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-heading h3 {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.card-text {
+  margin: 8px 0 12px;
+  font-size: 14.5px;
+  line-height: 150%;
+}
+
+.highlight {
+  background: var(--accent-bg);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.card-link:hover {
+  text-decoration: underline;
+}
+
+.answer-card {
+  line-height: 160%;
+}
+
+.sources-heading {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin: 20px 0 12px;
+  font-weight: 500;
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.source-row a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14.5px;
+}
+
+.source-row a:hover {
+  text-decoration: underline;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 2px;
+}
