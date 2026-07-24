@@ -33,7 +33,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements-dev.txt -e .
+      # -e ../scraper is separate from requirements-dev.txt on purpose: pip
+      # resolves a local -e path relative to the CWD it's invoked from (here,
+      # api/), not relative to whatever file referenced it, so it can't live
+      # inside requirements.txt without breaking the Docker build's different
+      # CWD -- see api/requirements.txt's comment and DECISIONS.md.
+      - run: pip install -r requirements-dev.txt -e . -e ../scraper
       - run: ruff check .
       - run: pytest
 

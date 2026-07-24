@@ -36,10 +36,16 @@ python -m venv .venv
 ```
 
 **api**
+
+api depends on scraper as a library (its db models, retrieve.py, rag.py -- see
+DECISIONS.md's Day 4 API task entry), so it needs an explicit `-e ../scraper` install too,
+separate from `requirements-dev.txt`: pip resolves a local `-e <path>` relative to the CWD
+it's invoked from (here, `api/`), not relative to whichever file referenced it, so it can't
+live inside `requirements.txt` without breaking under the Docker build's different CWD.
 ```powershell
 cd api
 python -m venv .venv
-.venv\Scripts\pip install -r requirements-dev.txt -e .
+.venv\Scripts\pip install -r requirements-dev.txt -e . -e ../scraper
 .venv\Scripts\ruff check .
 .venv\Scripts\pytest
 .venv\Scripts\uvicorn api.main:app --reload
