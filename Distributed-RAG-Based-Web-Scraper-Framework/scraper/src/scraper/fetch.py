@@ -37,4 +37,22 @@ def fetch(url: str, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
         raise error_cls(f"failed to fetch {url}: {exc}") from exc
     except requests.RequestException as exc:
         raise FetchError(f"failed to fetch {url}: {exc}") from exc
+
+    # requests only trusts an explicit charset in the Content-Type header;
+    # if the server omits one (both books.toscrape.com and
+    # quotes.toscrape.com send `Content-Type: text/html` with no charset),
+    # it silently falls back to ISO-8859-1 per an old RFC 2616 default --
+    # even though the actual bytes are UTF-8, which is what these sites (and
+    # most modern sites) actually send. Decoding UTF-8 bytes as Latin-1
+    # doesn't raise an error, it just produces mojibake (e.g. "£" -> "Â£"),
+    # so this has to be corrected explicitly. Checking the raw header for a
+    # `charset` param (rather than checking response.encoding's already-
+    # resolved value) is deliberate: a resolved value of "ISO-8859-1" is
+    # ambiguous -- it's what requests defaults to when nothing is declared,
+    # but it's also a value a server could declare on purpose, which
+    # shouldn't be second-guessed. Only the undeclared case gets
+    # response.apparent_encoding's real sniff of the body's actual bytes
+    # (via charset_normalizer).
+    if "charset" not in response.headers.get("Content-Type", "").lower():
+        response.encoding = response.apparent_encoding
     return response.text
