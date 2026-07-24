@@ -1,2 +1,17 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
+
+# api depends on scraper as a library (db models, retrieve.py, rag.py) --
+# see DECISIONS.md's Day 4 API task entry. Only the shared *version pins*
+# are pulled in here: pip resolves a requirements file's own `-r <path>`
+# relative to that file, so this line works the same regardless of the
+# caller's CWD. The editable install of the scraper *package* itself is
+# deliberately NOT here as `-e ../scraper` -- unlike `-r`, pip resolves a
+# local `-e <path>` relative to the CWD pip was invoked from, not to this
+# file. That's fine for local dev/CI (CWD is api/ either way), but breaks
+# inside the Docker build, where pip runs from /app and `../scraper` would
+# resolve outside the build context entirely. Install scraper as a package
+# with an explicit `pip install -e ../scraper` (local dev/CI) or
+# `pip install -e scraper` (Dockerfile, CWD /app) instead -- see README/CI
+# for the local command, api/Dockerfile for the Docker one.
+-r ../scraper/requirements.txt
