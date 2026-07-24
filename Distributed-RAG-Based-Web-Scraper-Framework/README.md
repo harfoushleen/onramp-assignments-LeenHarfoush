@@ -5,6 +5,12 @@ Generation (RAG). Extracts data from multiple sites at scale, indexes it, and ex
 through an API that answers natural-language queries grounded in the scraped content with
 cited sources.
 
+## Demo
+
+[Demo link](https://drive.google.com/file/d/16T5buqkUHDDuA1fYyjOFXCjhjtZhpEVh/view?usp=sharing) — video walkthrough of the finished UI (search + Q&A with citations).
+
+See [Report.md](Report.md) for the full write-up of each phase and detailed documentation.
+
 ## Layout
 
 - `scraper/` — Python worker: crawling, parsing, politeness/rate-limiting, job queue consumer.
