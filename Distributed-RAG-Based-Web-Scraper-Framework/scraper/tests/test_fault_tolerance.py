@@ -133,6 +133,7 @@ def test_process_page_task_retries_a_transient_db_error_and_then_succeeds():
         patch("scraper.tasks._session_factory", return_value=fake_session),
         patch("scraper.tasks.process_page") as mock_process_page,
         patch("scraper.tasks._write_dead_letter") as mock_dead_letter,
+        patch("scraper.tasks.embed_page_task.delay") as mock_embed_delay,
     ):
         mock_process_page.side_effect = [
             OperationalError("stmt", {}, Exception("connection dropped")),
@@ -143,6 +144,7 @@ def test_process_page_task_retries_a_transient_db_error_and_then_succeeds():
     assert async_result.state == "SUCCESS"
     assert mock_process_page.call_count == 2
     mock_dead_letter.assert_not_called()
+    mock_embed_delay.assert_called_once_with(7)
 
 
 def test_process_page_task_validation_error_is_non_retryable():

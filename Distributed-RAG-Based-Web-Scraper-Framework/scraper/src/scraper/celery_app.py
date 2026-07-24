@@ -10,6 +10,11 @@ on to skip writing them.
 import os
 
 from celery import Celery
+from dotenv import load_dotenv
+
+# See db.py's load_dotenv() comment -- same reasoning, needed again here
+# since REDIS_URL below is read before this module imports scraper.db.
+load_dotenv()
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 

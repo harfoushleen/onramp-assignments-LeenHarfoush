@@ -8,7 +8,13 @@ through", not the pipeline itself (already covered by test_crawl.py).
 from unittest.mock import MagicMock, patch
 
 from scraper.sites import SITES
-from scraper.tasks import _rate_limiter, _robots_checker, crawl_url_task, process_page_task
+from scraper.tasks import (
+    _rate_limiter,
+    _robots_checker,
+    crawl_url_task,
+    embed_page_task,
+    process_page_task,
+)
 
 URL = "https://quotes.toscrape.com/page/1/"
 
@@ -96,7 +102,10 @@ def test_process_page_task_stores_a_validated_processed_page():
 
     fake_session.add.side_effect = fake_add
 
-    with patch("scraper.tasks._session_factory", return_value=fake_session):
+    with (
+        patch("scraper.tasks._session_factory", return_value=fake_session),
+        patch("scraper.tasks.embed_page_task.delay") as mock_delay,
+    ):
         process_page_task.run(7)
 
     fake_session.get.assert_called_once()
@@ -105,6 +114,7 @@ def test_process_page_task_stores_a_validated_processed_page():
     assert stored["obj"].tables == []
     fake_session.commit.assert_called_once()
     fake_session.close.assert_called_once()
+    mock_delay.assert_called_once_with(7)
 
 
 def test_process_page_task_skips_when_already_processed():
@@ -116,6 +126,77 @@ def test_process_page_task_skips_when_already_processed():
 
     assert result is None
     fake_session.get.assert_not_called()
+    fake_session.add.assert_not_called()
+
+
+def test_process_page_task_enqueues_embed_page_task_after_storing():
+    fake_session = MagicMock()
+    fake_session.query.return_value.filter_by.return_value.first.return_value = None
+    fake_page = MagicMock(
+        id=7, raw_html="<html><body><p>Hi.</p></body></html>", extracted_text="Hi."
+    )
+    fake_session.get.return_value = fake_page
+
+    with (
+        patch("scraper.tasks._session_factory", return_value=fake_session),
+        patch("scraper.tasks.embed_page_task.delay") as mock_delay,
+    ):
+        process_page_task.run(7)
+
+    mock_delay.assert_called_once_with(7)
+
+
+def test_process_page_task_does_not_enqueue_embedding_when_already_processed():
+    fake_session = MagicMock()
+    fake_session.query.return_value.filter_by.return_value.first.return_value = MagicMock()
+
+    with (
+        patch("scraper.tasks._session_factory", return_value=fake_session),
+        patch("scraper.tasks.embed_page_task.delay") as mock_delay,
+    ):
+        process_page_task.run(7)
+
+    mock_delay.assert_not_called()
+
+
+def test_embed_page_task_chunks_and_embeds_the_latest_processed_page():
+    fake_session = MagicMock()
+    fake_session.query.return_value.filter_by.return_value.first.return_value = None
+    fake_processed = MagicMock(text="Some body text.", tables=[{"UPC": "abc123"}])
+    query_chain = fake_session.query.return_value.filter_by.return_value
+    query_chain.order_by.return_value.first.return_value = fake_processed
+
+    stored = []
+    fake_session.add.side_effect = stored.append
+
+    with (
+        patch("scraper.tasks._session_factory", return_value=fake_session),
+        patch("scraper.tasks.embed_text", return_value=[0.1, 0.2, 0.3]) as mock_embed,
+    ):
+        result = embed_page_task.run(7)
+
+    assert result == 2  # one text chunk + one table chunk
+    assert mock_embed.call_count == 2
+    assert [chunk.chunk_text for chunk in stored] == ["Some body text.", "UPC: abc123"]
+    assert [chunk.chunk_index for chunk in stored] == [0, 1]
+    assert all(chunk.page_id == 7 for chunk in stored)
+    assert all(chunk.embedding == [0.1, 0.2, 0.3] for chunk in stored)
+    fake_session.commit.assert_called_once()
+    fake_session.close.assert_called_once()
+
+
+def test_embed_page_task_skips_when_page_already_has_chunks():
+    fake_session = MagicMock()
+    fake_session.query.return_value.filter_by.return_value.first.return_value = MagicMock()
+
+    with (
+        patch("scraper.tasks._session_factory", return_value=fake_session),
+        patch("scraper.tasks.embed_text") as mock_embed,
+    ):
+        result = embed_page_task.run(7)
+
+    assert result is None
+    mock_embed.assert_not_called()
     fake_session.add.assert_not_called()
 
 

@@ -1,6 +1,12 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 is postgres:16 plus the pgvector extension
+    # pre-installed (not pre-enabled -- init_db() runs `CREATE EXTENSION IF
+    # NOT EXISTS vector` itself). Chosen over a separate vector-DB service
+    # (Chroma etc.) per the Day 1 decision to keep one database for both
+    # relational and vector data instead of running two stores to keep in
+    # sync.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: rag
       POSTGRES_PASSWORD: rag
@@ -25,6 +31,43 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    # Serves embeddings today (nomic-embed-text) and will also serve the
+    # answer-generation LLM in the next task -- one new service/dependency
+    # instead of two. `ollama-pull` below handles the one-time model
+    # download; this container just needs to be up and reachable.
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama-pull:
+    # Runs once, pulls both models this project needs into the shared
+    # ollama_data volume, then exits -- separate from the long-running
+    # ollama service so `docker compose up` doesn't block the whole stack
+    # on a fresh download every time. nomic-embed-text (~274MB) embeds
+    # chunks/queries; llama3.2:3b (~2GB) generates grounded, cited answers
+    # -- chosen over the 1b variant (weaker at strictly following "answer
+    # only from this context" instructions, a real risk for citation
+    # accuracy) and over a 7B-class model (much slower on the CPU-only
+    # inference this project runs, for a quality gain this demo-scale
+    # project doesn't need). `scraper`/`api` wait on this completing
+    # rather than just on `ollama` being healthy, so the first real
+    # embed/generate call doesn't race a still-downloading model.
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["sh", "-c", "ollama pull nomic-embed-text && ollama pull llama3.2:3b"]
+
   scraper:
     build: ./scraper
     depends_on:
@@ -32,17 +75,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag_scraper
       REDIS_URL: redis://redis:6379/0
+      OLLAMA_URL: http://ollama:11434
 
   api:
-    build: ./api
+    # Build context is the repo root (not ./api) so api/Dockerfile can also
+    # COPY in scraper/ -- the API imports scraper's db models, retrieve.py,
+    # and rag.py directly (an editable local install, Day 4's code-sharing
+    # decision: api depends on scraper as a library rather than duplicating
+    # its DB/retrieval/RAG logic).
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql+psycopg://rag:rag@postgres:5432/rag_scraper
+      OLLAMA_URL: http://ollama:11434
     ports:
       - "8000:8000"
 
@@ -53,3 +109,4 @@ services:
 
 volumes:
   pgdata:
+  ollama_data:

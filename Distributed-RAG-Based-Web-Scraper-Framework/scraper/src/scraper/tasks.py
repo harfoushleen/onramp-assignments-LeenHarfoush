@@ -30,14 +30,25 @@ an actual worker process boots.
 import logging
 from datetime import UTC, datetime
 
+import requests
 from celery import Task
 from celery.signals import worker_process_init
 from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
 from scraper.celery_app import celery_app
+from scraper.chunk import chunk_processed_page
 from scraper.crawl import crawl_one
-from scraper.db import DeadLetterTask, Page, ProcessedPage, get_engine, get_session_factory, init_db
+from scraper.db import (
+    Chunk,
+    DeadLetterTask,
+    Page,
+    ProcessedPage,
+    get_engine,
+    get_session_factory,
+    init_db,
+)
+from scraper.embed import embed_text
 from scraper.fetch import RetryableFetchError
 from scraper.process import process_page
 from scraper.rate_limit import RateLimiter
@@ -208,6 +219,7 @@ class ProcessPageTask(Task):
             )
             session.add(processed)
             session.commit()
+            embed_page_task.delay(page.id)
             return processed.id
         finally:
             session.close()
@@ -220,6 +232,79 @@ class ProcessPageTask(Task):
 
 
 process_page_task = celery_app.register_task(ProcessPageTask())
+
+
+class EmbedPageTask(Task):
+    """Loads a page's ProcessedPage record, splits it into chunks
+    (chunk.py), embeds each chunk via Ollama, and stores the results as
+    Chunk rows. Third link in the crawl -> process -> embed chain, kept as
+    its own task for the same reason process_page_task is separate from
+    crawl_url_task: independent retries, and a slow/unavailable embedding
+    service never blocks or loses the raw/processed data already stored.
+
+    Skips work if this page_id already has chunks -- `pages.id` gets a new
+    row per content version (see db.py), so "chunks already exist for this
+    page_id" means this exact version was already embedded, the same
+    versioning-aware skip pattern process_page_task uses for `already
+    processed`. Also doubles as the redelivery safety net for
+    task_acks_late, same reasoning as ProcessPageTask's own check.
+
+    Retries on RequestException (Ollama unreachable, still loading the
+    model, or a transient HTTP error from /api/embed) and OperationalError
+    (transient DB connectivity). A partially-embedded page from a failed
+    mid-loop attempt is safe to simply retry from scratch: chunk_processed_page()
+    is deterministic for a given page_id, so re-running just re-embeds and
+    re-inserts the same chunks -- there is no partial-row cleanup needed
+    because nothing is written to the DB until the full chunk list is ready.
+    """
+
+    name = "scraper.embed_page_task"
+    autoretry_for = (requests.exceptions.RequestException, OperationalError)
+    retry_backoff = True
+    retry_backoff_max = RETRY_BACKOFF_MAX_SECONDS
+    retry_jitter = True
+    max_retries = MAX_RETRIES
+
+    def run(self, page_id: int) -> int | None:
+        session = _session_factory()
+        try:
+            already_embedded = session.query(Chunk).filter_by(page_id=page_id).first() is not None
+            if already_embedded:
+                logger.info("page %s already has chunks for this version, skipping", page_id)
+                return None
+            processed = (
+                session.query(ProcessedPage)
+                .filter_by(page_id=page_id)
+                .order_by(ProcessedPage.processed_at.desc(), ProcessedPage.id.desc())
+                .first()
+            )
+            chunk_texts = chunk_processed_page(processed.text, processed.tables)
+            embeddings = [embed_text(chunk) for chunk in chunk_texts]
+            now = datetime.now(UTC)
+            paired = zip(chunk_texts, embeddings, strict=True)
+            for index, (chunk_text_value, embedding) in enumerate(paired):
+                session.add(
+                    Chunk(
+                        page_id=page_id,
+                        chunk_text=chunk_text_value,
+                        embedding=embedding,
+                        chunk_index=index,
+                        created_at=now,
+                    )
+                )
+            session.commit()
+            return len(chunk_texts)
+        finally:
+            session.close()
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo) -> None:
+        page_id = args[0] if args else kwargs.get("page_id")
+        url = _best_effort_url_for_page(page_id)
+        _write_dead_letter(self.name, url, str(exc), self.request.retries + 1)
+        super().on_failure(exc, task_id, args, kwargs, einfo)
+
+
+embed_page_task = celery_app.register_task(EmbedPageTask())
 
 
 def _best_effort_url_for_page(page_id: int | None) -> str | None:
