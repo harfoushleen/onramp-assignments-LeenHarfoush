@@ -22,4 +22,5 @@ select = ["E", "F", "I"]
 testpaths = ["tests"]
 markers = [
     "browser: launches a real headless browser (Playwright); skipped unless RUN_BROWSER_TESTS=1",
+    "db: hits a real Postgres+pgvector via DATABASE_URL; skipped unless RUN_DB_TESTS=1",
 ]
