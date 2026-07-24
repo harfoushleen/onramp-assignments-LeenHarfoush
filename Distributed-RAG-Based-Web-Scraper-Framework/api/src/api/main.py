@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 import requests
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from scraper.db import Page, ProcessedPage, latest_page_ids_subquery
 from scraper.rag import answer_query
@@ -45,6 +46,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="RAG Scraper API", lifespan=lifespan)
+
+# Basic Day 5 UI calls this API directly from the browser (dev server on a
+# different port, or the ui container over the compose network) -- both are
+# cross-origin from FastAPI's point of view, so without this every request
+# would be blocked by the browser before it even reaches the handlers below.
+# Wide open is fine for this project's local/demo scope.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(SQLAlchemyError)
